@@ -26,6 +26,12 @@ type Teacher struct {
 
 type Envelope map[string]any
 
+func deleteFromSlice(slice *[]any, indexToDelete int) {
+	if slice != nil && indexToDelete >= 0 && indexToDelete < len(*slice) {
+		*slice = append((*slice)[:indexToDelete], (*slice)[indexToDelete+1:]...)
+	}
+}
+
 func main() {
 	err := godotenv.Load()
 	if err != nil {
@@ -58,20 +64,21 @@ func main() {
 
 	r.Get("/persons/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		var person Person
+		idToFind, err := strconv.ParseInt(id, 10, 64)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+
 		for i := 0; i < len(persons); i++ {
 			curr := persons[i]
-			id, err := strconv.ParseInt(id, 10, 64)
-			if err != nil {
+			if int64(curr.Id) == idToFind {
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(curr)
 				return
 			}
-
-			if int64(curr.Id) == id {
-				person = curr
-			}
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(person)
+
+		w.WriteHeader(http.StatusNotFound)
 	})
 
 	r.Post("/persons", func(w http.ResponseWriter, r *http.Request) {
@@ -89,6 +96,30 @@ func main() {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(persons)
+	})
+
+	r.Delete("/persons/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		personID, err := strconv.ParseInt(id, 10, 64)
+		if err != nil {
+			w.WriteHeader(500)
+		}
+
+		indexToDelete := -1
+		for i, p := range persons {
+			if int64(p.Id) == personID {
+				indexToDelete = i
+				break
+			}
+		}
+
+		if indexToDelete == -1 {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		persons = append(persons[:indexToDelete], persons[indexToDelete+1:]...)
+		w.WriteHeader(http.StatusOK)
 	})
 
 	fmt.Printf("Server is now running on port: %s", port)
